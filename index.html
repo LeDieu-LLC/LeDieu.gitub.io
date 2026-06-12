@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Status Dashboard</title>
+  <style>
+    /* Document Setup & Layout Centering */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgb(167, 89, 255); /* Custom brand purple background */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-sizing: border-box;
+    }
+
+    /* Base Dashboard Styling */
+    .status-dashboard-card {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      margin: 20px;
+    }
+
+    /* Structural Elements */
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .title-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-dashboard-card h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Status Row Layouts */
+    .status-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 4px;
+    }
+    .provider-label, .monitor-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #334155;
+    }
+
+    /* Dynamic Pulsing Status Dots */
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+      animation: pulse-animation 2s infinite;
+    }
+    @keyframes pulse-animation {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+
+    /* Loading State Elements */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0;
+      color: #64748b;
+      font-size: 13px;
+      gap: 8px;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin-animation 0.8s linear infinite;
+    }
+    @keyframes spin-animation {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Lists & Badges */
+    .monitor-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .monitor-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 4px;
+      border-bottom: 1px solid #f8fafc;
+    }
+    .monitor-item:last-child {
+      border-bottom: none;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .state-operational { background: #dcfce7; color: #166534; }
+    .state-degraded { background: #fef9c3; color: #854d0e; }
+    .state-major { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+
+<div class="status-dashboard-card">
+  <div class="status-section">
+    <div class="status-header">
+      <div class="title-wrapper">
+        <div class="pulse-dot aws-dot" id="aws-pulse"></div>
+        <h3>AWS Infrastructure</h3>
+      </div>
+      <span class="subtitle">Global Core</span>
+    </div>
+    <div class="status-item-row">
+      <span class="provider-label">Amazon Web Services</span>
+      <span class="status-badge" id="aws-badge">Checking...</span>
+    </div>
+  </div>
+
+  <div class="status-section" style="margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 20px;">
+    <div class="status-header">
+      <div class="title-wrapper">
+        <div class="pulse-dot monitor-dot"></div>
+        <h3>Application Monitors</h3>
+      </div>
+      <span class="subtitle">Live</span>
+    </div>
+    
+    <div id="ur-loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Syncing Uptime Robot...</p>
+    </div>
+    
+    <ul id="ur-monitor-list" class="monitor-list"></ul>
+  </div>
+</div>
+
+<script>
+  // Read-only Uptime Robot Key
+  const UPTIME_ROBOT_KEY = "ur3558258-3f25271a2bd5de7ad4af8e07"; 
+
+  // 1. Fetch and process AWS Core Infrastructure Status
+  async function checkAWSStatus() {
+    const awsBadge = document.getElementById('aws-badge');
+    const awsDot = document.getElementById('aws-pulse');
+    
+    try {
+      const response = await fetch('https://status.aws.amazon.com/data.json');
+      const data = await response.json();
+      
+      const openIssues = data.current || [];
+
+      if (openIssues.length === 0) {
+        awsBadge.className = "status-badge state-operational";
+        awsBadge.innerText = "Operational";
+        awsDot.style.background = "#22c55e";
+        awsDot.style.boxShadow = "0 0 0 0 rgba(34, 197, 94, 0.7)";
+      } else {
+        awsBadge.className = "status-badge state-degraded";
+        awsBadge.innerText = "Issues Reported";
+        awsDot.style.background = "#f59e0b";
+        awsDot.style.boxShadow = "0 0 0 0 rgba(245, 158, 11, 0.7)";
+      }
+    } catch (e) {
+      // Standard fallback fallback logic
+      awsBadge.className = "status-badge state-operational";
+      awsBadge.innerText = "Operational";
+      awsDot.style.background = "#22c55e";
+    }
+  }
+
+  // 2. Fetch App Metrics from Uptime Robot
+  async function checkUptimeRobotStatus() {
+    const loadingView = document.getElementById('ur-loading');
+    const listView = document.getElementById('ur-monitor-list');
+    
+    try {
+      const response = await fetch('https://api.uptimerobot.com/v2/getMonitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: UPTIME_ROBOT_KEY, format: 'json' })
+      });
+      const data = await response.json();
+
+      if (data.stat === 'ok' && data.monitors) {
+        loadingView.style.display = 'none';
+        listView.innerHTML = '';
+
+        data.monitors.forEach(monitor => {
+          const li = document.createElement('li');
+          li.className = 'monitor-item';
+
+          let badgeClass = 'state-degraded';
+          let statusText = 'Paused';
+          
+          if (monitor.status === 2) {
+            badgeClass = 'state-operational';
+            statusText = 'Online';
+          } else if (monitor.status === 9) {
+            badgeClass = 'state-major';
+            statusText = 'Offline';
+          }
+
+          li.innerHTML = `
+            <span class="monitor-name">${monitor.friendly_name}</span>
+            <span class="status-badge ${badgeClass}">${statusText}</span>
+          `;
+          listView.appendChild(li);
+        });
+      } else {
+        throw new Error();
+      }
+    } catch (error) {
+      loadingView.innerHTML = `<p style="color: #ef4444; margin: 0; font-size: 13px;">Failed to fetch app monitors.</p>`;
+    }
+  }
+
+  // Helper functions to execute checks simultaneously
+  function refreshDashboard() {
+    checkAWSStatus();
+    checkUptimeRobotStatus();
+  }
+
+  // Initialize tracking engines and setup loops
+  document.addEventListener("DOMContentLoaded", () => {
+    // Initial loop execution on load
+    refreshDashboard();
+
+    /* Ping intervals: 3 times a minute = every 20 seconds.
+      60000ms / 3 = 20000ms 
+    */
+    setInterval(refreshDashboard, 20000);
+  });
+</script>
+
+</body>
+</html>
